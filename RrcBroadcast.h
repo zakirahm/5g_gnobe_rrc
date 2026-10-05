@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <functional>
 
 // Struct representing MIB parameters according to 3GPP TS 38.331
 struct MibParameters {
@@ -23,26 +24,42 @@ struct Sib1Parameters {
     bool si_SchedulingInfoPresent;  // Flag for other SIBs scheduling
 };
 
+// Target transport channel enum
+enum class BroadcastChannel {
+    BCH,    // Used for MIB
+    DL_SCH  // Used for SIB1
+};
+
+// Primitive structure sent down to MAC/PHY layer
+struct TxDataRequestPrimitive {
+    uint32_t sfn;
+    uint8_t slotNumber;
+    BroadcastChannel channel;
+    std::vector<uint8_t> pduPayload;
+};
+
 class GnbBroadcastManager {
 public:
+    // Define callback signature for lower-layer data delivery
+    using LowerLayerCallback = std::function<void(const TxDataRequestPrimitive&)>;
+
     GnbBroadcastManager();
     ~GnbBroadcastManager() = default;
 
-    // Encodes MIB into a byte payload ready for physical layer transmission (BCH)
-    std::vector<uint8_t> encodeMib(const MibParameters& params);
+    // Register the lower-layer callback function
+    void registerCallback(LowerLayerCallback cb);
 
-    // Encodes SIB1 into a byte payload ready for transport channel mapping (DL-SCH)
+    // Encodes MIB and SIB1 payload bytes
+    std::vector<uint8_t> encodeMib(const MibParameters& params);
     std::vector<uint8_t> encodeSib1(const Sib1Parameters& params);
 
-    // Triggers the broadcast schedule for a transmission time interval (TTI)
+    // Triggers broadcast scheduling and pushes data to the registered callback
     void triggerBroadcastTransmission(uint32_t currentSfn, uint8_t currentSlot);
 
 private:
     MibParameters m_mibConfig;
     Sib1Parameters m_sib1Config;
-
-    // Internal helper for bit-packing operations
-    void packBits(uint32_t value, int numBits, std::vector<uint8_t>& buffer, int& bitOffset);
+    LowerLayerCallback m_lowerLayerCallback;
 };
 
 #endif // RRC_BROADCAST_H
